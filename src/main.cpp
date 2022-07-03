@@ -9,6 +9,7 @@
 #define IR_BIG 21
 #define BUTTON_START 3
 #define BUTTON_END 5
+#define BUTTON_RESET 6
 
 // STATE DECLARATION
 bool isRunning = false;
@@ -47,6 +48,30 @@ bool startListener()
   {
     delay(20);
     while (digitalRead(BUTTON_START) == LOW)
+      ;
+    return true;
+  }
+  return false;
+}
+
+bool resetListener()
+{
+  if (digitalRead(BUTTON_RESET) == LOW)
+  {
+    delay(20);
+    while (digitalRead(BUTTON_RESET) == LOW)
+      ;
+    return true;
+  }
+  return false;
+}
+
+bool endListener()
+{
+  if (digitalRead(BUTTON_END) == LOW)
+  {
+    delay(20);
+    while (digitalRead(BUTTON_END) == LOW)
       ;
     return true;
   }
@@ -133,5 +158,32 @@ void loop()
     }
   }
 
-    
+  if (endListener()) // Apakah perhitungan per user akan dihilangkan
+  {
+    Serial.println("Anda mengumpulkan :");
+    Serial.println(String(userSmallBottle) + " botol kecil.");
+    Serial.println(String(userMediumBottle) + " botol sedang.");
+    Serial.println(String(userBigBottle) + " botol besar.");
+
+    float point = userSmallBottle / minSmallBottle + userMediumBottle / minMediumBottle + userBigBottle / minBigBottle;
+
+    Serial.println("");
+    Serial.println("Dengan ini anda mendapatkan : " + String((int)point) + " poin");
+
+    /*
+      ...
+      Code block untuk mencetak tiket
+      ...
+    */
+  }
+
+  if (resetListener())
+  {
+    userSmallBottle = 0;
+    userMediumBottle = 0;
+    userBigBottle = 0;
+    smallBottle = 0;
+    mediumBottle = 0;
+    bigBottle = 0;
+  }
 }
