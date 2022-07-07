@@ -3,6 +3,14 @@
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_Thermal.h>
 #include <SoftwareSerial.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+const char *ssid = "PantiElka(Pantek)";
+const char *password = "welovearifpens";
+
+// Your Domain name with URL path or IP address with path
+String serverName = "https://api.telegram.org/bot5387313925:AAET2g-V4EZLDqQCDvIGYjkLD_JhymbpAzY/sendMessage?chat_id=921859033&text=";
 
 // PINOUT DEFINING
 #define CAPACITIVE 34
@@ -13,7 +21,7 @@
 #define IR_BIG 12
 #define BUTTON_START 4
 #define BUTTON_END 18
-#define BUTTON_RESET 6
+#define BUTTON_RESET 15
 #define SERVO 13
 #define TX_PIN 33
 #define RX_PIN 32
@@ -36,10 +44,17 @@ int userSmallBottle = 0;
 int userMediumBottle = 0;
 int userBigBottle = 0;
 
-// CONSTANT VARS
+// Minimum Bottle Storage
 const int minSmallBottle = 10;
 const int minMediumBottle = 5;
 const int minBigBottle = 3;
+
+// Maximum Bottle Storage
+const int maxSmallBottle = 50;
+const int maxMediumBottle = 30;
+const int maxBigBottle = 20;
+
+// LCD SPECS
 const int lcdColumns = 20;
 const int lcdRows = 4;
 
@@ -69,7 +84,6 @@ void startListener()
     delay(20);
     while (digitalRead(BUTTON_START) == LOW)
       ;
-    Serial.println("START");
     isRunning = true;
   }
 }
@@ -122,6 +136,8 @@ int bottleSorter()
     return 2;
   else if (!digitalRead(IR_BIG))
     return 3;
+  else
+    return 4;
 }
 
 void lcdState()
@@ -134,6 +150,18 @@ void lcdState()
   lcd.print(String(userMediumBottle) + " botol sedang.");
   lcd.setCursor(0, 3);
   lcd.print(String(userBigBottle) + " botol besar.");
+}
+
+bool isStorageFull()
+{
+  if ((maxSmallBottle - smallBottle) <= minSmallBottle)
+    return true;
+  else if ((maxMediumBottle - mediumBottle) <= minMediumBottle)
+    return true;
+  else if ((maxBigBottle - bigBottle) <= minBigBottle)
+    return true;
+  else
+    return false;
 }
 
 void printExample(int point)
@@ -162,6 +190,7 @@ void printExample(int point)
   printer.setSize('M');
   printer.println(F("Poin"));
   printer.println(F("\r\n"));
+
   printer.println(F("\r\n"));
   printer.println(F("===="));
 
@@ -179,11 +208,65 @@ void setup()
   lcd.backlight();
 
   mySerial.begin(9600);
+  lcd.clear();
+
+  WiFi.begin(ssid, password);
+  lcd.setCursor(0, 0);
+  lcd.print("Connecting");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    lcd.print("Connecting");
+    delay(500);
+    lcd.clear();
+  }
+  lcd.print("IP Address: ");
+  lcd.setCursor(0, 1);
+  lcd.print(WiFi.localIP());
+
+  delay(1000);
+  lcd.clear();
 }
 
 void loop()
 {
+  if (isStorageFull())
+  {
+    HTTPClient http;
+
+    String serverPath = serverName + "Penyimpanan penuh, silahkan dibersihkan.";
+
+    // Your Domain name with URL path or IP address with path
+    http.begin(serverPath.c_str());
+
+    // Send HTTP GET request
+    int httpResponseCode = http.GET();
+
+    http.end();
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Penyimpanan Penuh ");
+    lcd.setCursor(0, 1);
+    lcd.print("Coba Beberapa Saat Lagi");
+
+    while (isStorageFull())
+    {
+      if (resetListener())
+      {
+        userSmallBottle = 0;
+        userMediumBottle = 0;
+        userBigBottle = 0;
+        smallBottle = 0;
+        mediumBottle = 0;
+        bigBottle = 0;
+      }
+    }
+
+    return;
+  }
   startListener();
+  if (!isRunning)    // Apakah sudah ditekan tombol start?
+    return;          // Jika tidak, cek lagi.
   if (endListener()) // Apakah perhitungan per user akan dihilangkan
   {
     lcd.clear();
@@ -200,14 +283,11 @@ void loop()
     lcd.clear();
     printExample((int)point);
 
-
     userSmallBottle = 0;
     userMediumBottle = 0;
     userBigBottle = 0;
   }
   lcdState();
-  if (!isRunning) // Apakah sudah ditekan tombol start?
-    return;       // Jika tidak, cek lagi.
 
   if (!bottleDetector()) // Apakah botolnya ada?
     return;              // Jika tidak, cek lagi.
@@ -223,7 +303,7 @@ void loop()
     delay(5);
   }
 
-  delay(5000);
+  delay(3000);
 
   for (pos = 180; pos >= 0; pos -= 1)
   { // goes from 180 degrees to 0 degrees
@@ -251,7 +331,9 @@ void loop()
       bigBottle++;
       isSortingNow = false;
       break;
-
+    case 4: // Botol Besar
+      isSortingNow = true;
+      break;
     default:
       break;
     }
